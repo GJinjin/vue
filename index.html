@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app">
+        <p>{{name}}</p>
+        <p k-text="name"></p>
+        <p>{{age}}</p>
+        <input type="text" k-model='name' />
+        <button @click='changeName'>changeName</button>
+        <div k-html='html'></div>
+    </div>
+    <script src="compile.js"></script>
+    <script src="vue.js"></script>
+    <script>
+        const app = new Vue({
+            el: '#app',
+            data: {
+                name: 'Jane',
+                age: 18,
+                html: '<button>This is a button</button>'
+            },
+            created() {
+                setTimeout(() => {
+                    this.name = 'test';
+                }, 1000);
+            },
+            methods: {
+                changeName() {
+                    this.name = 'Jane';
+                    this.age -=1;
+                }
+            }
+        })
+    </script>
+</body>
+</html>
