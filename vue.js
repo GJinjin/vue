@@ -1,103 +1,233 @@
-// 定义Vue构造函数
-class Vue {
+// create Vue constructor
+class Vue{
     constructor(options) {
-        // 保存选项
-        this.$options = options;
-        // 传入data
-        this.$data = options.data;
-        // 响应化处理
-        this.observe(this.$data);
+        this.$options = options
 
-        new Compile(options.el, this);
+        this.$data = options.data
 
-        options.created && options.created.call(this);
+        // data responsiveness
+        observe(this.$data)
+
+        // proxy data
+        proxy(this, '$data')
+
+        // compile template
+        new Compile('#app', this)
     }
+}
 
-    observe(value) {
-        if(!value || typeof value !== 'object') {
-            return;
+class Compile {
+    constructor(el, vm) {
+        this.$el = document.querySelector(el)
+        this.$vm = vm
+
+        if(this.$el) {
+            this.compile(this.$el)
         }
-
-        // 遍历value
-        Object.keys(value).forEach(key => {
-            // 响应式处理
-            this.defineReactive(value, key, value[key]);
-            // 定义属性data中的数据
-            this.proxyData(key);
-        })
     }
 
-    defineReactive(obj, key, val) {
-        // 递归遍历
-        this.observe(val);
+    compile(el) {
+        el.childNodes.forEach(node => {
+            // element
+            if(node.nodeType === 1) {
+                this.compileElement(node)
 
-        // 定义Dep
-        // 每个Dep实例和data中每个key是一对一关系
-        const dep = new Dep();
+            // text
+            } else if(this.isInter(node)) {
+                this.compileText(node)
+            }
 
-        // obj每一个key定义数据拦截
-        Object.defineProperty(obj, key, {
-            get() {
-                // 依赖收集
-                Dep.target && dep.addDep(Dep.target);
-                return val;
-            },
-            set(newVal) {
-                if(newVal === val) {
-                    return val;
-                } else {
-                    // console.log(key+'更新了');
-                    val = newVal;
-                    dep.notify();
-                }
+            if(node.childNodes && node.childNodes.length > 0) {
+                this.compile(node)
             }
         })
     }
 
-    proxyData(key) {
-        Object.defineProperty(this, key, {
-            get() {
-                return this.$data[key];
-            },
-            set(newVal) {
-                this.$data[key] = newVal;
+    compileElement(node) {
+        const nodeAttrs = node.attributes
+
+        Array.from(nodeAttrs).forEach(attr => {
+            const name = attr.name
+            const exp = attr.value
+
+            if(name.indexOf('k-') === 0) {
+                const dir = name.slice(2)
+
+                this[dir] && this[dir](node, exp)
             }
+
+            if(name.indexOf('@') === 0) {
+                const dir = name.slice(1)
+
+                this.eventHandler(node, dir, exp)
+            }
+        })
+    }
+
+    compileText(node) {
+        console.log(node, RegExp.$1)
+        this.update(node, RegExp.$1, 'text')
+    }
+
+    isInter(node) {
+        return node.nodeType === 3 && /\{\{(.*)\}\}/.test(node.textContent)
+    }
+
+    html(node, exp) {
+        this.update(node, exp, 'html')
+    }
+
+    htmlUpdater(node, val) {
+        node.innerHTML = val
+    }
+
+    text(node, exp) {
+        this.update(node, exp, 'text')
+    }
+
+    textUpdater(node, val) {
+        node.textContent = val
+    }
+
+    model(node, exp) {
+        this.update(node, exp, 'model')
+
+        node.addEventListener('input', e => {
+            console.log(e.target.value)
+            this.$vm[exp] = e.target.value
+        })
+    }
+
+    modelUpdater(node, val) {
+        node.value = val
+    }
+
+    update(node, exp, dir) {
+        const fn = this[dir + 'Updater']
+
+        fn && fn(node, this.$vm[exp])
+
+        new Watch(this.$vm, exp, function(exp) {
+            fn && fn(node, exp)
+        })
+    }
+
+    eventHandler(node, dir, exp) {
+        const fn = this.$vm.$options.methods && this.$vm.$options.methods[exp]
+        node.addEventListener(dir, fn.bind(this.$vm))
+    }
+}
+
+class Observer{
+    constructor(value) {
+        this.value = value
+
+        this.walk(value)
+    }
+
+    walk(obj) {
+        Object.keys(obj).forEach(key => {
+            defineReative(obj, key, obj[key])
         })
     }
 }
 
-// 创建dep：管理所有watcher
 class Dep {
     constructor() {
-        // 存储所有依赖
-        this.deps = [];
+        this.deps = []
     }
 
-    addDep(dep) {
-        this.deps.push(dep);
+    addDep(watcher) {
+        this.deps.push(watcher)
     }
 
     notify() {
-        this.deps.forEach(dep => dep.update());
+        this.deps.forEach(watcher => watcher.update())
     }
 }
 
-// 创建Watcher：保存data中数值和页面中的挂钩关系
-class Watcher {
-    constructor(vm, key, cb) {
-        // 创建实例时立刻将该实例指向Dep.target便于收集依赖
-        this.vm = vm;
-        this.key = key;
-        this.cb = cb;
+class Watch {
+    constructor(vm, key, updateFn) {
+        this.vm = vm
+        this.key = key
+        this.updateFn = updateFn
 
-        Dep.target = this;
-        this.vm[this.key]; // 触发依赖收集
-        Dep.target = null;
+        Dep.target = this
+        this.vm[this.key] // 读取Key值触发依赖收集
+        Dep.target = null // 释放全局变量，防止和下一变量冲突
+
     }
 
-    // 更新
     update() {
-        // console.log(this.key + '更新了！');
-        this.cb.call(this.vm, this.vm[this.key]);
+        this.updateFn.call(this.vm, this.vm[this.key])
     }
+}
+
+// 替换数组原型中7个方法
+const orginalProto = Array.prototype
+// 备份一份修改备份
+const arrayProto = Object.create(orginalProto);
+
+['push', 'pop', 'shift', 'unshift'].forEach(method => {
+    arrayProto[method] = function() {
+        // 原始操作
+        orginalProto[method].apply(this, arguments)
+        // 覆盖操作：通知更新
+        console.log('数组执行 '+ method + '操作')
+    }
+})
+
+function observe(obj) {
+    if(typeof obj !== 'object' || obj === null) {
+        return
+    }
+
+    if(Array.isArray(obj)) {
+        // 覆盖原型，替换7个变更操作
+        obj.__proto__ = arrayProto
+        // 对数组内部元素执行响应化
+        const keys = Object.keys(obj)
+        for(let i = 0; i < obj.length; i++) {
+            observe(obj[i])
+        }
+    } else {
+        new Observer(obj)
+    }
+}
+
+function defineReative(obj, key, val) {
+    observe(val)
+
+    const dep = new Dep()
+
+    Object.defineProperty(obj, key, {
+        get() {
+            console.log(val)
+            Dep.target && dep.addDep(Dep.target)
+            return val
+        },
+        set(newVal) {
+            console.log(key, newVal)
+            if(val === newVal) {
+                return;
+            } else {
+                val = newVal
+            }
+
+            dep.notify()
+        }
+    })
+}
+
+function proxy(vm, key) {
+    Object.keys(vm[key]).forEach(k => {
+        Object.defineProperty(vm, k, {
+            get() {
+                return vm[key][k]
+            },
+            set(val) {
+                vm[key][k] = val
+            }
+        })
+    })
 }

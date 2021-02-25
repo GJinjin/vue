@@ -14,7 +14,7 @@
         <button @click='changeName'>changeName</button>
         <div k-html='html'></div>
     </div>
-    <script src="compile.js"></script>
+    <!-- <script src="compile.js"></script> -->
     <script src="vue.js"></script>
     <script>
         const app = new Vue({
@@ -22,7 +22,8 @@
             data: {
                 name: 'Jane',
                 age: 18,
-                html: '<button>This is a button</button>'
+                html: '<button>This is a button</button>',
+                arr: [1,2,3]
             },
             created() {
                 setTimeout(() => {
@@ -36,6 +37,19 @@
                 }
             }
         })
+
+        // let timer = setInterval(() => {
+           
+        //     if(app.age === 0) {
+        //         clearInterval(timer);
+        //     } else {
+        //         app.age--;
+        //     }
+        // }, 1000)
+
+        app.arr.push(4)
+
+        
     </script>
 </body>
 </html>
